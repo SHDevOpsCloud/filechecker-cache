@@ -64,3 +64,9 @@ def run_filechecker(folder_path: str):
         })
 
     return results
+
+if __name__ == "__main__":
+    results = run_filechecker("C:\\path\\to\\your\\folder")
+    for r in results:
+        print(r)
+
