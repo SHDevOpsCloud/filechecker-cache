@@ -1,56 +1,136 @@
-# FileChecker
+# metrics-exporter
 
-A lightweight, safety‑focused file validation utility designed for automation workflows and DevOps environments.  
-It classifies files, validates extensions, applies rule‑based checks, and ensures predictable behavior in pipelines.
+A lightweight FastAPI-based metrics service that exposes system metrics, file integrity data, and diagnostic endpoints for automation and DevOps workflows. Designed for clarity, reliability, and predictable behavior in small-business and internal tooling environments.
 
 ---
 
 ## Features
 
-- Rule‑based file validation  
-- Normalized extension handling  
-- Safe execution wrapper to prevent unexpected crashes  
-- Clear classification logic for different file types  
-- Designed for automation, monitoring, and batch processing workflows  
+- Prometheus‑ready `/metrics` endpoint  
+- Background scanning threads  
+- File integrity and mismatch reporting  
+- Version drift detection  
+- System metrics (CPU, memory, timestamps)  
+- Config-driven behavior  
+- Safe execution wrappers to prevent pipeline crashes  
+- Modular design for easy extension  
 
 ---
 
 ## Why This Exists
 
-In real environments, automation pipelines often break because of:
-- Unexpected file extensions  
-- Misclassified files  
-- Silent failures  
-- Inconsistent validation logic  
+Automation pipelines and monitoring systems often fail due to:
 
-**FileChecker** provides a predictable, centralized validation layer that prevents those issues.
+- Silent file changes  
+- Unexpected version drift  
+- Missing or replaced files  
+- Lack of visibility into system metrics  
+- No unified place to expose diagnostic data  
+
+**metrics-exporter** provides a single, predictable service that exposes both system and file integrity metrics in a clean, observable format.
+
+---
+
+## Architecture
+
+```
+metrics-exporter/
+│
+├── server.py               # FastAPI app and routing
+├── file_checker.py         # File classification, validation, mismatch logic
+├── metrics_cache.py        # CPU, memory, timestamps, Prometheus metrics
+├── system_metrics.py       # System-level metric collection
+├── config_loader.py        # Config parsing and validation
+├── threads.py              # Background scanning threads
+└── requirements.txt
+```
+
+Each module is isolated and testable, following a simple, enterprise-style structure.
+
+---
+
+## Endpoints
+
+### `/metrics`
+Prometheus-formatted metrics including:
+- CPU usage  
+- Memory usage  
+- Last scan timestamps  
+- File integrity counters  
+
+### `/filechecker`
+Runs file classification and validation using the FileChecker module.
+
+### `/mismatches`
+Returns detected mismatches between expected and actual file states.
+
+### `/versions`
+Reports version drift or unexpected changes.
+
+### `/file-report`
+Full integrity report including:
+- New files  
+- Changed files  
+- Missing files  
+- Unchanged files  
+
+### `/health`
+Simple health check for monitoring systems.
 
 ---
 
 ## How It Works
 
-1. **Classify the file**  
-   Determines the file type based on extension and known rules.
-
-2. **Normalize the extension**  
-   Ensures `.TXT`, `.txt`, `.Txt` all behave consistently.
-
-3. **Apply validation rules**  
-   Each file type has a rule set (size limits, allowed extensions, etc).
-
-4. **Safe execution wrapper**  
-   Prevents exceptions from crashing the pipeline.
+1. Background threads collect system metrics and scan file structures.  
+2. FileChecker classifies and validates files using rule-based logic.  
+3. MetricsCache stores system and file metrics.  
+4. FastAPI exposes the data through JSON and Prometheus endpoints.  
+5. External systems (Prometheus, Grafana, scripts) consume the metrics.
 
 ---
 
 ## Example Usage
 
-```python
-from filechecker import classify_file, validate_file
+Start the service:
 
-result = validate_file("reports/data.txt")
+```
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
 
-if result.is_valid:
-    print("File is valid:", result.details)
-else:
-    print("Invalid file:", result.error)
+Query metrics:
+
+```
+curl http://localhost:8000/metrics
+```
+
+Get file integrity report:
+
+```
+curl http://localhost:8000/file-report
+```
+
+---
+
+## Typical Use Cases
+
+- Monitoring file integrity in regulated environments  
+- Detecting unexpected file changes  
+- Observability for automation pipelines  
+- Lightweight system metrics exporter  
+- DevOps tooling for small businesses or internal teams  
+
+---
+
+## Future Improvements
+
+- YAML-based configuration  
+- Async scanning mode  
+- Grafana dashboard templates  
+- Alerting thresholds for file drift  
+- Logging hooks for audit trails  
+
+---
+
+## License
+
+MIT License
