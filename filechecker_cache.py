@@ -1,9 +1,18 @@
 import os
 import json
+import hashlib
 from pathlib import Path
 from dataclasses import dataclass
 from pathlib import Path
 from enum import Enum
+
+# ANSI colors for terminal output
+RESET = "\033[0m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+CYAN = "\033[36m"
+BLUE = "\033[34m"
 
 class ValidationStatus(Enum):
     OK = "ok"
@@ -14,6 +23,7 @@ class ChangeStatus(Enum):
     NEW = "new"
     CHANGED = "changed"
     UNCHANGED = "unchanged"
+    DELETED = "DELETED"
 
 @dataclass
 class RuleContext:
@@ -33,14 +43,48 @@ class FileCheckResult:
     modified: float
     status: ValidationStatus
     details: str
+    
+def colorize_change(change_status):
+    if change_status == ChangeStatus.NEW:
+        return GREEN
+    elif change_status == ChangeStatus.CHANGED:
+        return YELLOW
+    elif change_status == ChangeStatus.DELETED:
+        return RED
+    else:
+        return BLUE  # Unchanged    
+    
+def format_result(result: FileCheckResult) -> str:
+    # Normalize status to a string
+    if isinstance(result.status, str):
+        status_text = result.status.upper()
+    else:
+        status_text = result.status.value.upper()
+        
+    if status_text == "OK":
+        status_color = GREEN
+    elif status_text == "ERROR":
+        status_color = RED
+    else:
+        status_color = YELLOW
+    
+    header = f"{CYAN}=== {result.file} ({result.type}) ==={RESET}"
+    status_line = f"Status:       {status_color}{status_text}{RESET}"
+    change_text = result.change.value.capitalize()
+    change_color = colorize_change(result.change)
+        
+    return (
+        f"\n{header}\n"
+        f"{status_line}\n"
+        f"Change:       {change_color}{change_text}{RESET}\n"
+        f"MD5:          {result.md5}\n"
+        f"SHA256:       {result.sha256}\n"
+        f"Size:         {result.size} bytes\n"
+        f"Modified:     {result.modified}\n"
+        f"Details:      {result.details}\n"
+    )
 
 BASELINE_FILE = "baseline.json"
-RULES = {
-    "json": validate_json,
-    "dll": validate_dll,
-    "text": validate_text,
-    "log": validate_log,
-}
 
 EXTENSION_RULES = {
     ".dll": "dll",
@@ -83,6 +127,25 @@ def save_baseline(data):
             json.dump(data, f, indent=2)
     except Exception as e:
         print(f"Failed to save baseline: {e}")
+        
+def reset_baseline():
+    baseline_file = "baseline.json"
+    if os.path.exists(baseline_file):
+        os.remove(baseline_file)
+    # Optional: recreate empty baseline
+    save_baseline({})
+        
+        # --- Change Detection ---
+def determine_change(result: FileCheckResult, baseline: dict) -> ChangeStatus:
+    previous = baseline.get(result.file)
+
+    if previous is None:
+        return ChangeStatus.NEW
+
+    if previous["sha256"] == result.sha256:
+        return ChangeStatus.UNCHANGED
+
+    return ChangeStatus.CHANGED
 
 def scan_folder(folder_path: str):
     """Return a list of file paths inside the folder."""
@@ -99,30 +162,15 @@ def classify_file(path: Path) -> str:
     ext = normalize_extension(path)
     return EXTENSION_RULES.get(ext, "unknown")
 
-def validate_file(context: RuleContext, file_type: str):
-    """Dispatch validation based on file type."""
-    path = context.path
-    rule = RULES.get(file_type)
+def validate_file(context: RuleContext):
+    rule = RULES.get(context.file_type)
     
-    context = RuleContext(
-        path=path,
-        file_type=file_type,
-        previous_info=baseline.get(path.name),
-        baseline=baseline,
-    )
     if rule:
         return safe_execute(rule, context)
-    return {"status": ValidationStatus.OK, "details": "No rules for this file type"}
-    if file_type == "json":
-        return validate_json(path)
-    elif file_type == "text":
-        return validate_text(path)
-    elif file_type == "dll":
-        return validate_dll(path)
-    elif file_type == "log":
-        return validate_log(path)
-    else:
-        return {"status": ValidationStatus.OK, "details": "No rules for this file type"}
+    return {
+        "status": ValidationStatus.OK, 
+        "details": "No rules for this file type"
+		}
 
 def validate_text(context: RuleContext):
     """Basic text file validation."""
@@ -191,7 +239,12 @@ def validate_dll(context: RuleContext):
     path = context.path
     return {"status": ValidationStatus.OK, "details": "DLL validation not implemented yet"}
 
-import hashlib
+RULES = {
+    "json": validate_json,
+    "dll": validate_dll,
+    "text": validate_text,
+    "log": validate_log,
+}
 
 def compute_hashes(path: Path):
     """Return MD5 and SHA256 hashes for a file."""
@@ -223,7 +276,17 @@ def run_filechecker(folder_path: str):
     
     for file_path in scan_folder(folder_path):
         file_type = classify_file(file_path)
-        validation = validate_file(file_path, file_type)
+        
+        previous_info = baseline.get(file_path.name)
+        
+        context = RuleContext(
+            path=file_path,
+            file_type=file_type,
+            previous_info=previous_info,
+            baseline=baseline
+        )
+        
+        validation = validate_file(context)
         hashes = compute_hashes(file_path)
 
         current_info = {
@@ -232,7 +295,6 @@ def run_filechecker(folder_path: str):
             "size": file_path.stat().st_size,
             "modified": file_path.stat().st_mtime,
 }
-        previous_info = baseline.get(file_path.name)
 
         # Determine change status
         if previous_info is None:
@@ -254,17 +316,78 @@ def run_filechecker(folder_path: str):
             details=validation["details"],
         ))
         
-        new_baseline = {r.file: {
-            "md5": r.md5,
-            "sha256": r.sha256,
-            "size": r.size,
-            "modified": r.modified,
-        } for r in results}
+    # --- Detect deleted files ---
+    current_files = {r.file for r in results}
 
+    for old_file, old_meta in baseline.items():
+        if old_file not in current_files:
+            results.append(FileCheckResult(
+                file=old_file,
+                type="unknown",
+                change=ChangeStatus.DELETED,
+                md5=old_meta.get("md5", ""),
+                sha256=old_meta.get("sha256", ""),
+                size=old_meta.get("size", 0),
+                modified=old_meta.get("modified", 0),
+                status=ValidationStatus.OK,
+                details="File existed in baseline but is missing now",
+            ))        
+        
+        
+    new_baseline = {r.file: {
+        "md5": r.md5,
+        "sha256": r.sha256,
+        "size": r.size,
+        "modified": r.modified,
+    } for r in results}
+    
+    save_baseline(new_baseline)
     return results
 
-if __name__ == "__main__":
-    results = run_filechecker("C:\\path\\to\\your\\folder")
-    for r in results:
-        print(r)
+def main():
+    import argparse
+    from pathlib import Path
 
+    parser = argparse.ArgumentParser(
+        description="FileCheckerCache — validate files, compute hashes, and compare baselines."
+    )
+
+    parser.add_argument(
+        "folder",
+        nargs="?",
+        default="testdata",
+        help="Folder to scan for files"
+    )
+    
+    parser.add_argument(
+        "--reset-baseline",
+        action="store_true",
+        help="Reset the baseline before scanning"
+    )
+
+    args = parser.parse_args()
+    folder_path = str(Path(args.folder).resolve())
+    
+    if args.reset_baseline:
+        reset_baseline()
+
+    results = run_filechecker(folder_path)
+
+    for r in results:
+        print(format_result(r))
+
+    ok_count = sum(1 for r in results if r.status == ValidationStatus.OK)
+    error_count = sum(1 for r in results if str(r.status).lower() == "error")
+    total = len(results)
+
+    ok_color = GREEN if ok_count > 0 else RESET
+    err_color = RED if error_count > 0 else RESET
+
+    print(f"\nSummary:")
+    print(f"  OK:     {ok_color}{ok_count}{RESET}")
+    print(f"  Errors: {err_color}{error_count}{RESET}")
+    print(f"  Total:  {total}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,26 @@
+{
+  "test.txt": {
+    "md5": "21af6ecbb6ac502ea386aa875e63164e",
+    "sha256": "bba2c39025e8d6e9a0ba5fd0d0d27500f0dcffad2c249c83b5b1bd0b26375e8e",
+    "size": 22,
+    "modified": 1789796527.3406873
+  },
+  "test.log": {
+    "md5": "4d3ae5bba0c25bff407d0ea691fd3b9c",
+    "sha256": "b695fca57fdc9a4d686e46aa24c51f544ac6fa6e1c4bd54d04c68d34fbcc69c8",
+    "size": 57,
+    "modified": 1789852916.4311628
+  },
+  "test.json": {
+    "md5": "38d7aead18516e21bf975f901b99b045",
+    "sha256": "fe3880097df900a67e07808f3ff9eb7bb0adbf77999718f74957c6cd745c635b",
+    "size": 15,
+    "modified": 1789796625.465062
+  },
+  "delete.log": {
+    "md5": "0e95a9e3e8219c9b0bfd508da0161c10",
+    "sha256": "8e30d6c4effeed2d592fa38a9887aa6331e99e1d1a104975d318d39ba65e1a6d",
+    "size": 12,
+    "modified": 1789852835.461164
+  }
+}
