@@ -51,6 +51,17 @@ Summary:
   Errors: 1
   Total:  3
 
+
+**What This Output Shows**
+- Unchanged file (`delete.log`)
+- Changed file (`test.log`)
+- JSON parsing error (`test.json`)
+- MD5 + SHA256 hashing
+- File size and modification timestamps
+- Summary block with OK/error totals
+
+![FileChecker Example](./assests/filechecker-all-stats.png)
+
 ---
 
 ## Folder Structure Example
