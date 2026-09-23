@@ -60,7 +60,7 @@ Summary:
 - File size and modification timestamps
 - Summary block with OK/error totals
 
-![FileChecker Example](./assests/filechecker-all-stats.png)
+![FileChecker Example](./assets/filechecker-all-stats.png)
 
 ---
 
